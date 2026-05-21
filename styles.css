@@ -152,3 +152,21 @@ html, body {
 #stage.shift-drag-mode #cursor-ring {
   opacity: 1;
 }
+
+/* ─── DOCK HIGHLIGHT ─── */
+#dock-highlight {
+  position: absolute;
+  top: 34px; left: 8px; bottom: 10px;
+  width: 148px;
+  background: rgba(74, 158, 255, 0.08);
+  border: 1.5px solid rgba(74, 158, 255, 0.6);
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 50;
+}
+
+#stage.dock-targeted #dock-highlight {
+  opacity: 1;
+}

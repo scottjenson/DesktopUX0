@@ -1,19 +1,22 @@
 const MENUBAR_H = 24;
-const ICON_W = 120;
-const ICON_H = 92;
-const ICON_LEFT = 12;
+const DOCK_W = 160;
+const ICON_W = 100;
+const ICON_H = 76;
+const DOCK_INSET = 8; // left inset of dock highlight border
+const DOCK_BORDER_W = 148; // width of the visible dock box (DOCK_W - DOCK_INSET)
+const ICON_LEFT = DOCK_INSET + Math.round((DOCK_BORDER_W - ICON_W) / 2);
 const ICON_TOP_START = 48; // below menubar
-const ICON_GAP = 12;
+const ICON_GAP = 20;
 const MARGIN = 40; // gap from screen edges when restoring
 
 // Window definitions — add more here as needed
 // corner: which screen corner to restore to (for non-center windows)
 const windowTypes = [
   { title: 'Untitled',  tint: null },
-  { title: 'Notes',     tint: 'rgba(255, 243, 176, 0.55)', corner: 'top-left' },
-  { title: 'Research',  tint: 'rgba(176, 217, 255, 0.55)', corner: 'top-right' },
-  { title: 'Files',     tint: 'rgba(188, 255, 188, 0.55)', corner: 'bottom-left' },
-  { title: 'Messages',  tint: 'rgba(255, 200, 220, 0.55)', corner: 'bottom-right' },
+  { title: 'Notes',     tint: '#fdf6c3', corner: 'top-left' },
+  { title: 'Research',  tint: '#d6eaff', corner: 'top-right' },
+  { title: 'Files',     tint: '#d4f0d4', corner: 'bottom-left' },
+  { title: 'Messages',  tint: '#f5dde8', corner: 'bottom-right' },
 ];
 
 const minimizedWindows = []; // ordered list of minimized window els
@@ -82,24 +85,48 @@ function attachShiftDrag(win) {
     if (!stage.classList.contains('shift-drag-mode')) return;
     if (win.classList.contains('minimized')) return;
 
-    const startX = e.clientX - win.offsetLeft;
-    const startY = e.clientY - win.offsetTop;
+    const dragStartClientX = e.clientX;
+    const offsetX = e.clientX - win.offsetLeft;
+    const offsetY = e.clientY - win.offsetTop;
+    let directionDecided = false;
+    let dockTargeted = false;
 
     win.classList.add('dragging', 'shift-dragging');
 
     function onMove(e) {
-      win.style.left = (e.clientX - startX) + 'px';
-      win.style.top  = (e.clientY - startY) + 'px';
+      win.style.left = (e.clientX - offsetX) + 'px';
+      win.style.top  = (e.clientY - offsetY) + 'px';
+
+      if (!directionDecided && Math.abs(e.clientX - dragStartClientX) >= 20) {
+        directionDecided = true;
+        dockTargeted = e.clientX < dragStartClientX;
+        stage.classList.toggle('dock-targeted', dockTargeted);
+      }
+    }
+
+    function cleanup(shouldDock) {
+      win.classList.remove('dragging', 'shift-dragging');
+      stage.classList.remove('dock-targeted');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('shiftcancelled', onShiftCancelled);
+      if (shouldDock) {
+        // Remove dragging before minimizing so CSS transition fires
+        requestAnimationFrame(() => minimizeWindow(win));
+      }
     }
 
     function onUp() {
-      win.classList.remove('dragging', 'shift-dragging');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      cleanup(dockTargeted);
+    }
+
+    function onShiftCancelled() {
+      cleanup(false);
     }
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+    document.addEventListener('shiftcancelled', onShiftCancelled);
   });
 }
 
@@ -176,7 +203,7 @@ function positionCorner(el, corner) {
   const h = el.offsetHeight;
   const top    = MENUBAR_H + MARGIN;
   const bottom = vh - h - MARGIN;
-  const left   = ICON_LEFT + ICON_W + MARGIN;
+  const left   = DOCK_W + MARGIN;
   const right  = vw - w - MARGIN;
   const positions = {
     'top-left':     { x: left,  y: top    },
@@ -225,7 +252,10 @@ document.addEventListener('keydown', e => {
 });
 
 document.addEventListener('keyup', e => {
-  if (e.key === 'Shift') stage.classList.remove('shift-drag-mode');
+  if (e.key === 'Shift') {
+    stage.classList.remove('shift-drag-mode', 'dock-targeted');
+    document.dispatchEvent(new Event('shiftcancelled'));
+  }
 });
 
 document.addEventListener('mousemove', e => {
