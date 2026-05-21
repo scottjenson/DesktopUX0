@@ -199,6 +199,11 @@ html, body {
   cursor: grab;
 }
 
+.shift-highlighted {
+  filter: drop-shadow(0 0 20px rgb(255, 20, 20));
+  transition: filter 0.4s ease;
+}
+
 #stage.shift-drag-mode .window.shift-dragging {
   cursor: grabbing;
 }
@@ -218,7 +223,7 @@ html, body {
 }
 
 #stage.shift-drag-mode #cursor-ring {
-  opacity: 1;
+  opacity: 0;
 }
 
 /* ─── DOCK HIGHLIGHT ─── */

@@ -464,10 +464,39 @@ document.addEventListener('keyup', e => {
   if (e.key === 'Shift') {
     stage.classList.remove('shift-drag-mode', 'dock-targeted', 'clipboard-targeted');
     document.dispatchEvent(new Event('shiftcancelled'));
+    clearShiftHighlight();
   }
 });
+
+let shiftHighlightedEl = null;
+
+function clearShiftHighlight() {
+  if (shiftHighlightedEl) {
+    shiftHighlightedEl.classList.remove('shift-highlighted');
+    shiftHighlightedEl = null;
+  }
+}
+
+function updateShiftHighlight(x, y) {
+  if (!stage.classList.contains('shift-drag-mode')) { clearShiftHighlight(); return; }
+
+  const el = document.elementFromPoint(x, y);
+  const target = el && (
+    el.closest('.finder-icon') ||
+    el.closest('.highlight') ||
+    el.closest('.window:not(.minimized)')
+  );
+
+  if (target === shiftHighlightedEl) return;
+  clearShiftHighlight();
+  if (target) {
+    target.classList.add('shift-highlighted');
+    shiftHighlightedEl = target;
+  }
+}
 
 document.addEventListener('mousemove', e => {
   cursorRing.style.left = e.clientX + 'px';
   cursorRing.style.top  = e.clientY + 'px';
+  updateShiftHighlight(e.clientX, e.clientY);
 });
