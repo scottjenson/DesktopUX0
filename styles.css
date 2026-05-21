@@ -102,3 +102,25 @@ html, body {
   min-height: 300px;
   background: #ffffff;
 }
+
+/* ─── TRANSITIONS ─── */
+.window {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              top 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.window.dragging {
+  transition: none;
+}
+
+.window.minimized {
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.window.minimized .traffic-lights,
+.window.minimized .window-title {
+  display: none;
+}

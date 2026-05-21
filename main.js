@@ -1,9 +1,16 @@
 const MENUBAR_H = 24;
+const ICON_W = 60;
+const ICON_H = 46;
+const ICON_LEFT = 12;
+const ICON_TOP_START = 48; // below menubar
+const ICON_GAP = 12;
 
 // Window definitions — add more here as needed
 const windowTypes = [
   { title: 'Untitled', tint: null },
 ];
+
+const minimizedWindows = []; // ordered list of minimized window els
 
 function createWindow({ title, tint }) {
   const win = document.createElement('div');
@@ -26,7 +33,98 @@ function createWindow({ title, tint }) {
 
   win.appendChild(titlebar);
   win.appendChild(body);
+
+  attachDrag(win, titlebar);
+  attachMinimize(win);
+
+  win.addEventListener('click', () => {
+    if (win.classList.contains('minimized')) restoreWindow(win);
+  });
+
   return win;
+}
+
+function attachDrag(win, handle) {
+  handle.addEventListener('mousedown', e => {
+    // Don't drag when clicking traffic lights
+    if (e.target.classList.contains('tl')) return;
+
+    const startX = e.clientX - win.offsetLeft;
+    const startY = e.clientY - win.offsetTop;
+
+    win.classList.add('dragging');
+
+    function onMove(e) {
+      win.style.left = (e.clientX - startX) + 'px';
+      win.style.top  = (e.clientY - startY) + 'px';
+    }
+
+    function onUp() {
+      win.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function attachMinimize(win) {
+  const lights = win.querySelectorAll('.tl');
+  lights.forEach(tl => {
+    tl.addEventListener('click', e => {
+      e.stopPropagation();
+      if (win.classList.contains('minimized')) {
+        restoreWindow(win);
+      } else {
+        minimizeWindow(win);
+      }
+    });
+  });
+}
+
+function iconTop(index) {
+  return ICON_TOP_START + index * (ICON_H + ICON_GAP);
+}
+
+function minimizeWindow(win) {
+  // Save current position for restore
+  win._restoreLeft = win.style.left;
+  win._restoreTop  = win.style.top;
+
+  const index = minimizedWindows.length;
+  minimizedWindows.push(win);
+
+  const fullW = win.offsetWidth;
+  const fullH = win.offsetHeight;
+  const scale = ICON_W / fullW;
+
+  const targetLeft = ICON_LEFT;
+  const targetTop  = iconTop(index);
+
+  // Shift origin to top-left before scaling so it lands at the right spot
+  win.style.transformOrigin = '0 0';
+  win.style.left = targetLeft + 'px';
+  win.style.top  = targetTop + 'px';
+  win.style.transform = `scale(${scale})`;
+  win.classList.add('minimized');
+}
+
+function restoreWindow(win) {
+  const index = minimizedWindows.indexOf(win);
+  if (index !== -1) minimizedWindows.splice(index, 1);
+
+  win.style.transformOrigin = '';
+  win.style.transform = '';
+  win.style.left = win._restoreLeft;
+  win.style.top  = win._restoreTop;
+  win.classList.remove('minimized');
+
+  // Re-stack remaining icons
+  minimizedWindows.forEach((w, i) => {
+    w.style.top = iconTop(i) + 'px';
+  });
 }
 
 function positionCenter(el) {
@@ -47,5 +145,5 @@ windowTypes.forEach(def => {
 });
 
 window.addEventListener('resize', () => {
-  scene.querySelectorAll('.window').forEach(positionCenter);
+  scene.querySelectorAll('.window:not(.minimized)').forEach(positionCenter);
 });
