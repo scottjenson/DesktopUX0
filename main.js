@@ -41,6 +41,7 @@ function createWindow({ title, tint }) {
   win.appendChild(body);
 
   attachDrag(win, titlebar);
+  attachShiftDrag(win);
   attachMinimize(win);
 
   win.addEventListener('click', () => {
@@ -67,6 +68,32 @@ function attachDrag(win, handle) {
 
     function onUp() {
       win.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function attachShiftDrag(win) {
+  win.addEventListener('mousedown', e => {
+    if (!stage.classList.contains('shift-drag-mode')) return;
+    if (win.classList.contains('minimized')) return;
+
+    const startX = e.clientX - win.offsetLeft;
+    const startY = e.clientY - win.offsetTop;
+
+    win.classList.add('dragging', 'shift-dragging');
+
+    function onMove(e) {
+      win.style.left = (e.clientX - startX) + 'px';
+      win.style.top  = (e.clientY - startY) + 'px';
+    }
+
+    function onUp() {
+      win.classList.remove('dragging', 'shift-dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     }
@@ -187,4 +214,21 @@ requestAnimationFrame(() => {
 
 window.addEventListener('resize', () => {
   scene.querySelectorAll('.window:not(.minimized)').forEach(positionCenter);
+});
+
+// ─── SHIFT-DRAG MODE ───
+const stage = document.getElementById('stage');
+const cursorRing = document.getElementById('cursor-ring');
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Shift') stage.classList.add('shift-drag-mode');
+});
+
+document.addEventListener('keyup', e => {
+  if (e.key === 'Shift') stage.classList.remove('shift-drag-mode');
+});
+
+document.addEventListener('mousemove', e => {
+  cursorRing.style.left = e.clientX + 'px';
+  cursorRing.style.top  = e.clientY + 'px';
 });

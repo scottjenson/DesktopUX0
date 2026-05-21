@@ -125,3 +125,30 @@ html, body {
 .window.minimized .window-title {
   display: none;
 }
+
+/* ─── SHIFT-DRAG MODE ─── */
+#stage.shift-drag-mode .window:not(.minimized) {
+  cursor: grab;
+}
+
+#stage.shift-drag-mode .window.shift-dragging {
+  cursor: grabbing;
+}
+
+#cursor-ring {
+  position: fixed;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 3px solid #4a9eff;
+  box-shadow: 0 0 12px rgba(74, 158, 255, 0.5);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 9999;
+}
+
+#stage.shift-drag-mode #cursor-ring {
+  opacity: 1;
+}
