@@ -10,6 +10,10 @@ const ICON_TOP_START = 48; // below menubar
 const ICON_GAP = 20;
 const MARGIN = 40; // gap from screen edges when restoring
 
+const stage = document.getElementById('stage');
+const cursorRing = document.getElementById('cursor-ring');
+const scene = document.getElementById('scene');
+
 // Window definitions — add more here as needed
 // corner: which screen corner to restore to (for non-center windows)
 // type: 'blank' | 'text' | 'finder'
@@ -153,6 +157,10 @@ function attachClipDrag(card) {
       card.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      if (wasDragged) {
+        const idx = clipItems.indexOf(card);
+        if (idx !== -1) clipItems.splice(idx, 1);
+      }
     }
 
     document.addEventListener('mousemove', onMove);
@@ -167,10 +175,8 @@ function attachClipDrag(card) {
     // re-stack remaining right-anchored cards
     let y = CLIP_TOP_START;
     clipItems.forEach(c => {
-      if (!c._freed) {
-        c.style.top = y + 'px';
-        y += c.offsetHeight + CLIP_GAP;
-      }
+      c.style.top = y + 'px';
+      y += c.offsetHeight + CLIP_GAP;
     });
   });
 }
@@ -257,6 +263,10 @@ function createWindow({ title, tint, type = 'blank' }) {
   attachDrag(win, titlebar);
   attachShiftDrag(win);
   attachMinimize(win);
+
+  win.addEventListener('mousedown', () => {
+    if (!win.classList.contains('minimized')) scene.appendChild(win); // bring to front
+  });
 
   win.addEventListener('click', () => {
     if (win.classList.contains('minimized')) restoreWindow(win);
@@ -427,8 +437,6 @@ function positionCorner(el, corner) {
   el.style.top  = Math.round(y) + 'px';
 }
 
-const scene = document.getElementById('scene');
-
 // Suppress all transitions during initial layout
 scene.classList.add('no-transition');
 
@@ -455,11 +463,9 @@ window.addEventListener('resize', () => {
 });
 
 // ─── SHIFT-DRAG MODE ───
-const stage = document.getElementById('stage');
-const cursorRing = document.getElementById('cursor-ring');
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Shift') stage.classList.add('shift-drag-mode');
+  if (e.key === 'Shift' && !e.repeat) stage.classList.add('shift-drag-mode');
 });
 
 document.addEventListener('keyup', e => {
