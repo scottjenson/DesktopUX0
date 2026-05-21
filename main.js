@@ -115,6 +115,32 @@ function renderContent(type, body) {
   }
 }
 
+// ─── DRAG HELPER ───
+
+function startDrag(handle, { onStart, onMove, onUp, onCancel } = {}) {
+  handle.addEventListener('mousedown', e => {
+    if (onStart && onStart(e) === false) return;
+
+    function handleUp(e) {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', handleUp);
+      if (onCancel) document.removeEventListener('shiftcancelled', handleCancel);
+      if (onUp) onUp(e);
+    }
+
+    function handleCancel() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.removeEventListener('shiftcancelled', handleCancel);
+      if (onCancel) onCancel();
+    }
+
+    if (onMove) document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', handleUp);
+    if (onCancel) document.addEventListener('shiftcancelled', handleCancel);
+  });
+}
+
 // ─── CLIPBOARD DOCK ───
 const CLIP_TOP_START = 48;
 const CLIP_GAP = 20;
@@ -134,37 +160,32 @@ function addClipCard(cardEl) {
 
 function attachClipDrag(card) {
   let wasDragged = false;
+  let startX, startY;
 
-  card.addEventListener('mousedown', e => {
-    // Switch from right-anchored to left-anchored for free positioning
-    const rect = card.getBoundingClientRect();
-    card.style.right = 'auto';
-    card.style.left = rect.left + 'px';
-    card.style.top  = rect.top + 'px';
-
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
-    wasDragged = false;
-
-    function onMove(e) {
+  startDrag(card, {
+    onStart(e) {
+      // Switch from right-anchored to left-anchored for free positioning
+      const rect = card.getBoundingClientRect();
+      card.style.right = 'auto';
+      card.style.left = rect.left + 'px';
+      card.style.top  = rect.top + 'px';
+      startX = e.clientX - rect.left;
+      startY = e.clientY - rect.top;
+      wasDragged = false;
+    },
+    onMove(e) {
       wasDragged = true;
       card.classList.add('dragging');
       card.style.left = (e.clientX - startX) + 'px';
       card.style.top  = (e.clientY - startY) + 'px';
-    }
-
-    function onUp() {
+    },
+    onUp() {
       card.classList.remove('dragging');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
       if (wasDragged) {
         const idx = clipItems.indexOf(card);
         if (idx !== -1) clipItems.splice(idx, 1);
       }
-    }
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    },
   });
 
   card.addEventListener('click', () => {
@@ -203,36 +224,30 @@ function makeImageClip(svgHTML) {
 }
 
 function attachContentDrag(el, makeClip) {
-  el.addEventListener('mousedown', e => {
-    if (!stage.classList.contains('shift-drag-mode')) return;
-    e.stopPropagation(); // don't bubble to window shift-drag
+  let dragStartClientX, directionDecided, clipboardTargeted;
 
-    const dragStartClientX = e.clientX;
-    let directionDecided = false;
-    let clipboardTargeted = false;
+  function cleanup(shouldClip) {
+    stage.classList.remove('clipboard-targeted');
+    if (shouldClip) addClipCard(makeClip());
+  }
 
-    function onMove(e) {
+  startDrag(el, {
+    onStart(e) {
+      if (!stage.classList.contains('shift-drag-mode')) return false;
+      e.stopPropagation(); // don't bubble to window shift-drag
+      dragStartClientX = e.clientX;
+      directionDecided = false;
+      clipboardTargeted = false;
+    },
+    onMove(e) {
       if (!directionDecided && Math.abs(e.clientX - dragStartClientX) >= 20) {
         directionDecided = true;
         clipboardTargeted = e.clientX > dragStartClientX;
         stage.classList.toggle('clipboard-targeted', clipboardTargeted);
       }
-    }
-
-    function cleanup(shouldClip) {
-      stage.classList.remove('clipboard-targeted');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.removeEventListener('shiftcancelled', onShiftCancelled);
-      if (shouldClip) addClipCard(makeClip());
-    }
-
-    function onUp() { cleanup(clipboardTargeted); }
-    function onShiftCancelled() { cleanup(false); }
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.addEventListener('shiftcancelled', onShiftCancelled);
+    },
+    onUp()     { cleanup(clipboardTargeted); },
+    onCancel() { cleanup(false); },
   });
 }
 
@@ -276,78 +291,58 @@ function createWindow({ title, tint, type = 'blank' }) {
 }
 
 function attachDrag(win, handle) {
-  handle.addEventListener('mousedown', e => {
-    // Don't drag when clicking traffic lights
-    if (e.target.classList.contains('tl')) return;
-
-    const startX = e.clientX - win.offsetLeft;
-    const startY = e.clientY - win.offsetTop;
-
-    win.classList.add('dragging');
-
-    function onMove(e) {
+  let startX, startY;
+  startDrag(handle, {
+    onStart(e) {
+      if (e.target.classList.contains('tl')) return false;
+      startX = e.clientX - win.offsetLeft;
+      startY = e.clientY - win.offsetTop;
+      win.classList.add('dragging');
+    },
+    onMove(e) {
       win.style.left = (e.clientX - startX) + 'px';
       win.style.top  = (e.clientY - startY) + 'px';
-    }
-
-    function onUp() {
+    },
+    onUp() {
       win.classList.remove('dragging');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    },
   });
 }
 
 function attachShiftDrag(win) {
-  win.addEventListener('mousedown', e => {
-    if (!stage.classList.contains('shift-drag-mode')) return;
-    if (win.classList.contains('minimized')) return;
+  let offsetX, offsetY, dragStartClientX, directionDecided, dockTargeted;
 
-    const dragStartClientX = e.clientX;
-    const offsetX = e.clientX - win.offsetLeft;
-    const offsetY = e.clientY - win.offsetTop;
-    let directionDecided = false;
-    let dockTargeted = false;
+  function cleanup(shouldDock) {
+    win.classList.remove('dragging', 'shift-dragging');
+    stage.classList.remove('dock-targeted');
+    if (shouldDock) {
+      // Remove dragging before minimizing so CSS transition fires
+      requestAnimationFrame(() => minimizeWindow(win));
+    }
+  }
 
-    win.classList.add('dragging', 'shift-dragging');
-
-    function onMove(e) {
+  startDrag(win, {
+    onStart(e) {
+      if (!stage.classList.contains('shift-drag-mode')) return false;
+      if (win.classList.contains('minimized')) return false;
+      dragStartClientX = e.clientX;
+      offsetX = e.clientX - win.offsetLeft;
+      offsetY = e.clientY - win.offsetTop;
+      directionDecided = false;
+      dockTargeted = false;
+      win.classList.add('dragging', 'shift-dragging');
+    },
+    onMove(e) {
       win.style.left = (e.clientX - offsetX) + 'px';
       win.style.top  = (e.clientY - offsetY) + 'px';
-
       if (!directionDecided && Math.abs(e.clientX - dragStartClientX) >= 20) {
         directionDecided = true;
         dockTargeted = e.clientX < dragStartClientX;
         stage.classList.toggle('dock-targeted', dockTargeted);
       }
-    }
-
-    function cleanup(shouldDock) {
-      win.classList.remove('dragging', 'shift-dragging');
-      stage.classList.remove('dock-targeted');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.removeEventListener('shiftcancelled', onShiftCancelled);
-      if (shouldDock) {
-        // Remove dragging before minimizing so CSS transition fires
-        requestAnimationFrame(() => minimizeWindow(win));
-      }
-    }
-
-    function onUp() {
-      cleanup(dockTargeted);
-    }
-
-    function onShiftCancelled() {
-      cleanup(false);
-    }
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.addEventListener('shiftcancelled', onShiftCancelled);
+    },
+    onUp()     { cleanup(dockTargeted); },
+    onCancel() { cleanup(false); },
   });
 }
 
