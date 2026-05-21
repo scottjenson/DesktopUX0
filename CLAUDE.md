@@ -4,37 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a single-file HTML prototype (`insight_demo.html`) demonstrating a "3D UI Paradigm Shift" concept — a macOS-style desktop scene where a TextEdit window containing e-bike research data "explodes" into 3D space when the spacebar is held.
+An interactive macOS-style desktop prototype exploring a multi-window UI paradigm. Windows can be dragged, minimized to left-edge icons, and restored. The project is structured for future expansion with additional window types and content.
+
+## File Structure
+
+- `index.html` — shell only: menubar, `#scene` container, external CSS/JS references
+- `styles.css` — all visual styling
+- `main.js` — window definitions, creation, drag, minimize/restore logic
 
 ## Architecture
 
-Everything lives in one file: HTML structure, CSS (inline `<style>`), and JavaScript (inline `<script>`).
+**DOM hierarchy:**
+- `#stage` — full-viewport background (starfield gradient)
+  - `#menubar` — simulated macOS menu bar
+  - `#scene` — window container; gets `.no-transition` class during initial layout
 
-**Key DOM hierarchy:**
-- `#stage` — full-viewport container with CSS `perspective` for 3D
-  - `#menubar` — simulated macOS menu bar (translateZ, transitions out during pop)
-  - `#scene` — 3D-preserved inner scene
-    - `#window-wrapper` — positions/rotates the window; pivot is right-edge hinge
-      - `#window-chrome` — visual backdrop plane (fades on pop)
-      - `#titlebar` — macOS traffic lights + title
-      - `#editor-inner` — contenteditable text area; `.listing` rows float out on pop
-        - `.listing[data-ghost]` — each row references a ghost panel by ID
-          - `.phone[data-app]` — inline spans referencing an app-tray ghost by ID
-      - `.ghost` panels — slide in from the right edge on hover (web previews + app trays)
-  - `#trash`, `#dock` — decorative desktop elements
+**Window system:**
+- `windowTypes` array — defines all windows as `{ title, tint, corner }`; the first entry (no `corner`) is the center window
+- `createWindow(def)` — builds `.window > .window-titlebar + .window-body` DOM, attaches drag and minimize handlers
+- Windows are absolutely positioned via inline `left`/`top` styles
 
-**State machine (JS):**
-- `isPopped` boolean — controlled by spacebar keydown/keyup
-- `enterPopped()` adds `.popped` class to `#stage` and `.popped` to each `.phone`
-- `exitPopped()` removes them
-- CSS does all the 3D transitions via `#stage.popped` selectors
+**Minimize/restore:**
+- `minimizeWindow(win)` — saves `_restoreLeft`/`_restoreTop`, scales the window down to `ICON_W × ICON_H` (120×92px) via `transform: scale()` with `transformOrigin: 0 0`, moves it to a stacked left-edge position
+- `restoreWindow(win)` — clears transform, restores saved position, re-stacks remaining icons
+- `minimizedWindows[]` — ordered array tracking stacked icons; index determines `top` via `iconTop(i)`
+- Clicking a `.tl` button or the minimized window itself triggers toggle
 
-**Ghost panel system:**
-- `.ghost` elements are positioned `right: 100%` (off left edge of window) and slide in via `translateX`
-- `showGhost(id)` / `hideAllGhosts()` toggle `.visible` class
-- Listing `mouseenter` shows the listing's web ghost; phone `mouseenter` overrides with the app-tray ghost; phone `mouseleave` restores the listing ghost
+**Positioning:**
+- `positionCenter(el)` — centers in viewport accounting for `MENUBAR_H`
+- `positionCorner(el, corner)` — places at named corner (`top-left`, `top-right`, `bottom-left`, `bottom-right`) with `MARGIN` clearance; left-side corners offset by `ICON_LEFT + ICON_W` to avoid overlapping the icon strip
 
-**3D coordinate model:**
-- `--depth-z: 70px` CSS variable controls how far listings and phone spans pop forward
-- Mouse parallax (when not popped): gentle `rotateY`/`rotateX` on `#window-wrapper` based on cursor offset from viewport center
-- Pop state: `#window-wrapper` rotates `rotateY(24deg)` around the right-edge hinge (`transform-origin: calc(50% + 202px) center`)
+**Transitions:**
+- CSS transitions on `transform`, `left`, `top` for smooth minimize/restore animation
+- `.dragging` class disables transitions during titlebar drag
+- `.no-transition` on `#scene` suppresses all transitions during initial load (removed after first double-`requestAnimationFrame`)

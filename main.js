@@ -1,13 +1,19 @@
 const MENUBAR_H = 24;
-const ICON_W = 60;
-const ICON_H = 46;
+const ICON_W = 120;
+const ICON_H = 92;
 const ICON_LEFT = 12;
 const ICON_TOP_START = 48; // below menubar
 const ICON_GAP = 12;
+const MARGIN = 40; // gap from screen edges when restoring
 
 // Window definitions — add more here as needed
+// corner: which screen corner to restore to (for non-center windows)
 const windowTypes = [
-  { title: 'Untitled', tint: null },
+  { title: 'Untitled',  tint: null },
+  { title: 'Notes',     tint: 'rgba(255, 243, 176, 0.55)', corner: 'top-left' },
+  { title: 'Research',  tint: 'rgba(176, 217, 255, 0.55)', corner: 'top-right' },
+  { title: 'Files',     tint: 'rgba(188, 255, 188, 0.55)', corner: 'bottom-left' },
+  { title: 'Messages',  tint: 'rgba(255, 200, 220, 0.55)', corner: 'bottom-right' },
 ];
 
 const minimizedWindows = []; // ordered list of minimized window els
@@ -136,12 +142,47 @@ function positionCenter(el) {
   el.style.top  = Math.round((vh - h) / 2 + MENUBAR_H / 2) + 'px';
 }
 
+function positionCorner(el, corner) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const top    = MENUBAR_H + MARGIN;
+  const bottom = vh - h - MARGIN;
+  const left   = ICON_LEFT + ICON_W + MARGIN;
+  const right  = vw - w - MARGIN;
+  const positions = {
+    'top-left':     { x: left,  y: top    },
+    'top-right':    { x: right, y: top    },
+    'bottom-left':  { x: left,  y: bottom },
+    'bottom-right': { x: right, y: bottom },
+  };
+  const { x, y } = positions[corner];
+  el.style.left = Math.round(x) + 'px';
+  el.style.top  = Math.round(y) + 'px';
+}
+
 const scene = document.getElementById('scene');
 
-windowTypes.forEach(def => {
+// Suppress all transitions during initial layout
+scene.classList.add('no-transition');
+
+windowTypes.forEach((def, i) => {
   const win = createWindow(def);
   scene.appendChild(win);
-  positionCenter(win);
+  if (i === 0) {
+    positionCenter(win);
+  } else {
+    positionCorner(win, def.corner);
+    minimizeWindow(win);
+  }
+});
+
+// Re-enable transitions after first paint
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    scene.classList.remove('no-transition');
+  });
 });
 
 window.addEventListener('resize', () => {
