@@ -4,37 +4,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-An interactive macOS-style desktop prototype exploring a multi-window UI paradigm. Windows can be dragged, minimized to left-edge icons, and restored. The project is structured for future expansion with additional window types and content.
+An interactive macOS-style desktop prototype built for **stage demo purposes**. It explores a multi-window UI paradigm where content items can be dragged between windows and docks. This is a throwaway demo — prioritize visual clarity and simplicity over correctness or robustness.
 
 ## File Structure
 
-- `index.html` — shell only: menubar, `#scene` container, external CSS/JS references
+- `index.html` — shell only: menubar, `#scene`, dock overlays, cursor ring
 - `styles.css` — all visual styling
-- `main.js` — window definitions, creation, drag, minimize/restore logic
+- `main.js` — window definitions, creation, all interaction logic
 
 ## Architecture
 
 **DOM hierarchy:**
-- `#stage` — full-viewport background (starfield gradient)
+- `#stage` — full-viewport background (starfield gradient); receives state classes (`shift-drag-mode`, `dock-targeted`, `clipboard-targeted`)
   - `#menubar` — simulated macOS menu bar
-  - `#scene` — window container; gets `.no-transition` class during initial layout
+  - `#scene` — window container; gets `.no-transition` during initial layout
+  - `#dock-highlight` — left dock drop zone visual (invisible until drag)
+  - `#clipboard-dock` — right dock drop zone visual (invisible until drag)
+  - `.clip-card` elements — appended directly to `#stage`, float freely
 
 **Window system:**
-- `windowTypes` array — defines all windows as `{ title, tint, corner }`; the first entry (no `corner`) is the center window
-- `createWindow(def)` — builds `.window > .window-titlebar + .window-body` DOM, attaches drag and minimize handlers
-- Windows are absolutely positioned via inline `left`/`top` styles
+- `windowTypes` array — `{ title, tint, type, corner }`; first entry is center window (no `corner`)
+- `type`: `'blank'` | `'text'` | `'finder'` — dispatched by `renderContent(type, body)`
+- `createWindow(def)` — builds `.window > .window-titlebar + .window-body`, attaches all handlers
 
-**Minimize/restore:**
-- `minimizeWindow(win)` — saves `_restoreLeft`/`_restoreTop`, scales the window down to `ICON_W × ICON_H` (120×92px) via `transform: scale()` with `transformOrigin: 0 0`, moves it to a stacked left-edge position
-- `restoreWindow(win)` — clears transform, restores saved position, re-stacks remaining icons
-- `minimizedWindows[]` — ordered array tracking stacked icons; index determines `top` via `iconTop(i)`
-- Clicking a `.tl` button or the minimized window itself triggers toggle
+**Content types:**
+- `renderText(body)` — prose with a `.highlight` span; `attachContentDrag` wired to the span
+- `renderFinder(body)` — 3×2 SVG thumbnail grid; `attachContentDrag` wired to each `.finder-icon`
+- SVGs are fully inline — no external assets
+
+**Minimize/restore (window dock — left side):**
+- `minimizeWindow(win)` — saves `_restoreLeft`/`_restoreTop`, scales window to `ICON_W × ICON_H` (100×76px) via `transform: scale()` with `transformOrigin: 0 0`, stacks on left edge
+- `restoreWindow(win)` — clears transform, restores position, re-stacks remaining icons
+- `minimizedWindows[]` — ordered array; index → `top` via `iconTop(i)`
+
+**Clipboard dock (right side):**
+- `clipItems[]` — ordered array of `.clip-card` els appended to `#stage`
+- `addClipCard(el)` — stacks card in the right dock region, wires drag and dismiss
+- Cards are always children of `#stage` (never re-parented into windows) — positional overlap fakes "dropped into window"
+- Click without dragging dismisses a card; remaining stacked cards re-stack
+
+**Shift-drag mode:**
+- Shift key → `shift-drag-mode` on `#stage` → grab cursor + blue cursor ring (96px)
+- Dragging a **window** leftward 20px → `dock-targeted` → release minimizes to left dock
+- Dragging a **content item** rightward 20px → `clipboard-targeted` → release adds clip card to right dock
+- Content item `mousedown` calls `e.stopPropagation()` to prevent window drag from firing
+- Releasing Shift mid-drag dispatches `shiftcancelled` event, cleans up all state
 
 **Positioning:**
-- `positionCenter(el)` — centers in viewport accounting for `MENUBAR_H`
-- `positionCorner(el, corner)` — places at named corner (`top-left`, `top-right`, `bottom-left`, `bottom-right`) with `MARGIN` clearance; left-side corners offset by `ICON_LEFT + ICON_W` to avoid overlapping the icon strip
+- `positionCenter(el)` — centers in viewport below menubar
+- `positionCorner(el, corner)` — places at named corner with `MARGIN` clearance; left corners offset by `DOCK_W`; right corners offset by `DOCK_R_W` to reserve both dock zones
 
 **Transitions:**
-- CSS transitions on `transform`, `left`, `top` for smooth minimize/restore animation
-- `.dragging` class disables transitions during titlebar drag
-- `.no-transition` on `#scene` suppresses all transitions during initial load (removed after first double-`requestAnimationFrame`)
+- CSS transitions on `transform`, `left`, `top` for animate/restore
+- `.dragging` and `.no-transition .window` disable transitions during drag and initial load
+- Must remove `.dragging` before calling `minimizeWindow` — use `requestAnimationFrame` — otherwise transition won't fire
+
+## Demo Simplifications
+
+These are intentional shortcuts made because this is a stage demo, not production code:
+
+- **Clip cards are never re-parented.** Dragging a clip card "into" a window is purely visual — the card stays a child of `#stage`. DOM re-parenting would require coordinate system conversion and window hit-detection, too complex for a demo.
+- **No real images.** All Finder thumbnails are inline SVGs. No asset pipeline needed.
+- **Content doesn't shrink in dock icons.** Window icons show a scaled-down version of the full window including content, which looks fine at small scale. No special icon-mode rendering.
+- **No state persistence.** Everything resets on page reload. Clip cards, window positions, and minimized state are all in-memory only.
+- **Highlight text is hardcoded.** The blue-highlighted phrase in the Notes window is a static `<span>` — not a real text selection mechanism.

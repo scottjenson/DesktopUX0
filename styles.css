@@ -232,3 +232,58 @@ html, body {
 #stage.dock-targeted #dock-highlight {
   opacity: 1;
 }
+
+/* ─── CLIPBOARD DOCK ─── */
+#clipboard-dock {
+  position: absolute;
+  top: 34px; right: 8px; bottom: 10px;
+  width: 148px;
+  background: rgba(74, 158, 255, 0.08);
+  border: 1.5px solid rgba(74, 158, 255, 0.6);
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 50;
+}
+
+#stage.clipboard-targeted #clipboard-dock {
+  opacity: 1;
+}
+
+/* clip cards inside the clipboard dock */
+.clip-card {
+  position: absolute;
+  right: calc(8px + (148px - 80px) / 2); /* centered within the right dock area */
+  width: 80px;
+  background: #fff;
+  border-radius: 6px;
+  border: 0.5px solid rgba(0,0,0,0.15);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  overflow: hidden;
+  cursor: pointer;
+  pointer-events: all;
+  transition: opacity 0.2s ease;
+}
+
+.clip-card:hover {
+  opacity: 0.7;
+}
+
+.clip-card.dragging {
+  transition: none;
+  opacity: 0.9;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+}
+
+.clip-card-text {
+  padding: 7px 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1a1a1a;
+}
+
+.clip-card-image {
+  width: 100%;
+  display: block;
+}

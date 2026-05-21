@@ -1,5 +1,6 @@
 const MENUBAR_H = 24;
 const DOCK_W = 160;
+const DOCK_R_W = 160; // reserved right-side dock area (not yet visible)
 const ICON_W = 100;
 const ICON_H = 76;
 const DOCK_INSET = 8; // left inset of dock highlight border
@@ -92,8 +93,141 @@ function renderFinder(body) {
 }
 
 function renderContent(type, body) {
-  if (type === 'text')   renderText(body);
-  if (type === 'finder') renderFinder(body);
+  if (type === 'text') {
+    renderText(body);
+    // attach content drag to the highlight span after render
+    const highlight = body.querySelector('.highlight');
+    if (highlight) {
+      attachContentDrag(highlight, () => makeTextClip(highlight.textContent));
+    }
+  }
+  if (type === 'finder') {
+    renderFinder(body);
+    // attach content drag to each finder icon after render
+    body.querySelectorAll('.finder-icon').forEach(icon => {
+      const svgHTML = icon.querySelector('.finder-thumb').innerHTML;
+      attachContentDrag(icon, () => makeImageClip(svgHTML));
+    });
+  }
+}
+
+// ─── CLIPBOARD DOCK ───
+const CLIP_TOP_START = 48;
+const CLIP_GAP = 20;
+const clipItems = []; // ordered list of clip card els
+
+function clipTop(index) {
+  return CLIP_TOP_START + clipItems.slice(0, index).reduce((sum, el) => sum + el.offsetHeight + CLIP_GAP, 0);
+}
+
+function addClipCard(cardEl) {
+  cardEl.style.top = clipTop(clipItems.length) + 'px';
+  clipItems.push(cardEl);
+  stage.appendChild(cardEl);
+
+  attachClipDrag(cardEl);
+}
+
+function attachClipDrag(card) {
+  let wasDragged = false;
+
+  card.addEventListener('mousedown', e => {
+    // Switch from right-anchored to left-anchored for free positioning
+    const rect = card.getBoundingClientRect();
+    card.style.right = 'auto';
+    card.style.left = rect.left + 'px';
+    card.style.top  = rect.top + 'px';
+
+    const startX = e.clientX - rect.left;
+    const startY = e.clientY - rect.top;
+    wasDragged = false;
+
+    function onMove(e) {
+      wasDragged = true;
+      card.classList.add('dragging');
+      card.style.left = (e.clientX - startX) + 'px';
+      card.style.top  = (e.clientY - startY) + 'px';
+    }
+
+    function onUp() {
+      card.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  card.addEventListener('click', () => {
+    if (wasDragged) return; // don't dismiss if it was a drag
+    const idx = clipItems.indexOf(card);
+    if (idx !== -1) clipItems.splice(idx, 1);
+    card.remove();
+    // re-stack remaining right-anchored cards
+    let y = CLIP_TOP_START;
+    clipItems.forEach(c => {
+      if (!c._freed) {
+        c.style.top = y + 'px';
+        y += c.offsetHeight + CLIP_GAP;
+      }
+    });
+  });
+}
+
+function makeTextClip(text) {
+  const card = document.createElement('div');
+  card.className = 'clip-card';
+  const p = document.createElement('div');
+  p.className = 'clip-card-text';
+  p.textContent = text;
+  card.appendChild(p);
+  return card;
+}
+
+function makeImageClip(svgHTML) {
+  const card = document.createElement('div');
+  card.className = 'clip-card';
+  const img = document.createElement('div');
+  img.className = 'clip-card-image';
+  img.innerHTML = svgHTML;
+  img.querySelector('svg').style.cssText = 'width:100%;height:auto;display:block;';
+  card.appendChild(img);
+  return card;
+}
+
+function attachContentDrag(el, makeClip) {
+  el.addEventListener('mousedown', e => {
+    if (!stage.classList.contains('shift-drag-mode')) return;
+    e.stopPropagation(); // don't bubble to window shift-drag
+
+    const dragStartClientX = e.clientX;
+    let directionDecided = false;
+    let clipboardTargeted = false;
+
+    function onMove(e) {
+      if (!directionDecided && Math.abs(e.clientX - dragStartClientX) >= 20) {
+        directionDecided = true;
+        clipboardTargeted = e.clientX > dragStartClientX;
+        stage.classList.toggle('clipboard-targeted', clipboardTargeted);
+      }
+    }
+
+    function cleanup(shouldClip) {
+      stage.classList.remove('clipboard-targeted');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('shiftcancelled', onShiftCancelled);
+      if (shouldClip) addClipCard(makeClip());
+    }
+
+    function onUp() { cleanup(clipboardTargeted); }
+    function onShiftCancelled() { cleanup(false); }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('shiftcancelled', onShiftCancelled);
+  });
 }
 
 function createWindow({ title, tint, type = 'blank' }) {
@@ -281,7 +415,7 @@ function positionCorner(el, corner) {
   const top    = MENUBAR_H + MARGIN;
   const bottom = vh - h - MARGIN;
   const left   = DOCK_W + MARGIN;
-  const right  = vw - w - MARGIN;
+  const right  = vw - w - DOCK_R_W - MARGIN;
   const positions = {
     'top-left':     { x: left,  y: top    },
     'top-right':    { x: right, y: top    },
@@ -330,7 +464,7 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('keyup', e => {
   if (e.key === 'Shift') {
-    stage.classList.remove('shift-drag-mode', 'dock-targeted');
+    stage.classList.remove('shift-drag-mode', 'dock-targeted', 'clipboard-targeted');
     document.dispatchEvent(new Event('shiftcancelled'));
   }
 });
