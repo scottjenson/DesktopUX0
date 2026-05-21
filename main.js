@@ -279,8 +279,8 @@ function createWindow({ title, tint, type = 'blank' }) {
   attachShiftDrag(win);
   attachMinimize(win);
 
-  win.addEventListener('mousedown', () => {
-    if (!win.classList.contains('minimized')) scene.appendChild(win); // bring to front
+  win.addEventListener('mousedown', (e) => {
+    if (!win.classList.contains('minimized') && !e.target.classList.contains('tl')) scene.appendChild(win); // bring to front
   });
 
   win.addEventListener('click', () => {
@@ -310,7 +310,7 @@ function attachDrag(win, handle) {
 }
 
 function attachShiftDrag(win) {
-  let offsetX, offsetY, dragStartClientX, directionDecided, dockTargeted;
+  let offsetX, offsetY, dragStartClientX, dockTargeted;
 
   function cleanup(shouldDock) {
     win.classList.remove('dragging', 'shift-dragging');
@@ -335,11 +335,8 @@ function attachShiftDrag(win) {
     onMove(e) {
       win.style.left = (e.clientX - offsetX) + 'px';
       win.style.top  = (e.clientY - offsetY) + 'px';
-      if (!directionDecided && Math.abs(e.clientX - dragStartClientX) >= 20) {
-        directionDecided = true;
-        dockTargeted = e.clientX < dragStartClientX;
-        stage.classList.toggle('dock-targeted', dockTargeted);
-      }
+      dockTargeted = e.clientX < dragStartClientX - 20;
+      stage.classList.toggle('dock-targeted', dockTargeted);
     },
     onUp()     { cleanup(dockTargeted); },
     onCancel() { cleanup(false); },
