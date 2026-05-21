@@ -6,6 +6,12 @@
   --shadow-window: 0 20px 60px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
   --menubar-bg: rgba(240,240,245,0.92);
   --menubar-text: #1a1a1a;
+
+  /* dock layout — mirrors JS constants MENUBAR_H, DOCK_INSET, DOCK_BORDER_W */
+  --menubar-h: 24px;
+  --dock-inset: 8px;
+  --dock-border-w: 148px;
+  --clip-card-w: 80px;
 }
 
 html, body {
@@ -43,7 +49,7 @@ html, body {
 /* ─── MENU BAR ─── */
 #menubar {
   position: absolute; top: 0; left: 0; right: 0;
-  height: 24px;
+  height: var(--menubar-h);
   background: var(--menubar-bg);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -218,8 +224,8 @@ html, body {
 /* ─── DOCK HIGHLIGHT ─── */
 #dock-highlight {
   position: absolute;
-  top: 34px; left: 8px; bottom: 10px;
-  width: 148px;
+  top: calc(var(--menubar-h) + 10px); left: var(--dock-inset); bottom: 10px;
+  width: var(--dock-border-w);
   background: rgba(74, 158, 255, 0.08);
   border: 1.5px solid rgba(74, 158, 255, 0.6);
   border-radius: 8px;
@@ -236,8 +242,8 @@ html, body {
 /* ─── CLIPBOARD DOCK ─── */
 #clipboard-dock {
   position: absolute;
-  top: 34px; right: 8px; bottom: 10px;
-  width: 148px;
+  top: calc(var(--menubar-h) + 10px); right: var(--dock-inset); bottom: 10px;
+  width: var(--dock-border-w);
   background: rgba(74, 158, 255, 0.08);
   border: 1.5px solid rgba(74, 158, 255, 0.6);
   border-radius: 8px;
@@ -254,8 +260,8 @@ html, body {
 /* clip cards inside the clipboard dock */
 .clip-card {
   position: absolute;
-  right: calc(8px + (148px - 80px) / 2); /* centered within the right dock area */
-  width: 80px;
+  right: calc(var(--dock-inset) + (var(--dock-border-w) - var(--clip-card-w)) / 2); /* centered within the right dock area */
+  width: var(--clip-card-w);
   background: #fff;
   border-radius: 6px;
   border: 0.5px solid rgba(0,0,0,0.15);
