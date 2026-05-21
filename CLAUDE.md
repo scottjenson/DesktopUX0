@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Design Intent
+
+This prototype demonstrates three connected ideas:
+
+1. **A unified file + clipboard model.** Traditional desktops treat file management and clipboard as separate systems. This demo argues they should be one — files and text snippets are the same kind of thing, live in the same place, and move the same way.
+
+2. **A single new interaction primitive: the grab event.** Triggered by Shift+drag, it does different things depending on context — drag a window to dock it, drag a content item to extract it — but it's always the same gesture. The goal is to show that one simple event, layered by context, can replace several distinct UI mechanisms.
+
+3. **Content is separable from its container.** A highlight or an image isn't locked inside its window. The grab event reaches into a window and pulls content out into a shared clipboard space where it can be repositioned freely alongside other items.
+
+The demo is intentionally minimal — the point is the interaction model, not the content.
+
 ## Project Overview
 
 An interactive macOS-style desktop prototype built for **stage demo purposes**. It explores a multi-window UI paradigm where content items can be dragged between windows and docks. This is a throwaway demo — prioritize visual clarity and simplicity over correctness or robustness.
