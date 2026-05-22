@@ -5,8 +5,8 @@
 const windowTypes = [
   { title: 'Untitled',  tint: null,      type: 'blank' },
   { title: 'Notes',     tint: '#fdf6c3', type: 'text',   corner: 'top-left' },
-  { title: 'Research',  tint: '#d6eaff', type: 'finder', corner: 'top-right' },
-  { title: 'Files',     tint: '#d4f0d4', type: 'blank',  corner: 'bottom-left' },
+  { title: 'Finder',  tint: '#d6eaff', type: 'finder', corner: 'top-right' },
+  { title: 'Report',     tint: '#d4f0d4', type: 'blank',  corner: 'bottom-left' },
   { title: 'Messages',  tint: '#f5dde8', type: 'blank',  corner: 'bottom-right' },
 ];
 
