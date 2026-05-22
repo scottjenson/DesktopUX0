@@ -1,22 +1,20 @@
 const MENUBAR_H = 24;
 const DOCK_W = 160;
-const DOCK_R_W = 160; // reserved right-side dock area (not yet visible)
+const DOCK_R_W = 160;
 const ICON_W = 100;
 const ICON_H = 76;
-const DOCK_INSET = 8; // left inset of dock highlight border
-const DOCK_BORDER_W = 148; // width of the visible dock box (DOCK_W - DOCK_INSET)
-const ICON_LEFT = DOCK_INSET + Math.round((DOCK_BORDER_W - ICON_W) / 2);
-const ICON_TOP_START = 48; // below menubar
+const DOCK_INSET = 8;
+const DOCK_BORDER_W = 148;
+const ICON_LEFT  = DOCK_INSET + Math.round((DOCK_BORDER_W - ICON_W) / 2);
+const ICON_RIGHT = window.innerWidth - DOCK_R_W + DOCK_INSET + Math.round((DOCK_BORDER_W - ICON_W) / 2);
+const ICON_TOP_START = 48;
 const ICON_GAP = 20;
-const MARGIN = 40; // gap from screen edges when restoring
+const MARGIN = 40;
 
 const stage = document.getElementById('stage');
 const cursorRing = document.getElementById('cursor-ring');
 const scene = document.getElementById('scene');
 
-// Window definitions — add more here as needed
-// corner: which screen corner to restore to (for non-center windows)
-// type: 'blank' | 'text' | 'finder'
 const windowTypes = [
   { title: 'Untitled',  tint: null,      type: 'blank' },
   { title: 'Notes',     tint: '#fdf6c3', type: 'text',   corner: 'top-left' },
@@ -25,7 +23,151 @@ const windowTypes = [
   { title: 'Messages',  tint: '#f5dde8', type: 'blank',  corner: 'bottom-right' },
 ];
 
-const minimizedWindows = []; // ordered list of minimized window els
+// ─── UNIFIED DOCK ───
+// Each side tracks its own ordered list of docked card elements.
+const dockItems = { left: [], right: [] };
+
+function dockTop(index, side) {
+  return ICON_TOP_START + index * (ICON_H + ICON_GAP);
+}
+
+function dockLeft(side) {
+  if (side === 'left') return ICON_LEFT;
+  return window.innerWidth - DOCK_R_W + DOCK_INSET + Math.round((DOCK_BORDER_W - ICON_W) / 2);
+}
+
+function restack(side) {
+  dockItems[side].forEach((el, i) => {
+    el.style.left = dockLeft(side) + 'px';
+    el.style.top  = dockTop(i, side) + 'px';
+  });
+}
+
+function addToDock(card, side) {
+  const index = dockItems[side].length;
+  dockItems[side].push(card);
+  card.style.left = dockLeft(side) + 'px';
+  card.style.top  = dockTop(index, side) + 'px';
+  card.dataset.dockSide = side;
+  stage.appendChild(card);
+  attachDockCardBehavior(card);
+}
+
+function removeFromDock(card) {
+  const side = card.dataset.dockSide;
+  if (!side) return;
+  const arr = dockItems[side];
+  const idx = arr.indexOf(card);
+  if (idx !== -1) arr.splice(idx, 1);
+  card.remove();
+  restack(side);
+}
+
+function attachDockCardBehavior(card) {
+  if (card._dockBehaviorAttached) return;
+  card._dockBehaviorAttached = true;
+  let wasDragged = false;
+  let startX, startY;
+
+  startDrag(card, {
+    onStart(e) {
+      const rect = card.getBoundingClientRect();
+      card.style.left = rect.left + 'px';
+      card.style.top  = rect.top + 'px';
+      startX = e.clientX - rect.left;
+      startY = e.clientY - rect.top;
+      wasDragged = false;
+    },
+    onMove(e) {
+      wasDragged = true;
+      card.classList.add('dragging');
+      card.style.left = (e.clientX - startX) + 'px';
+      card.style.top  = (e.clientY - startY) + 'px';
+    },
+    onUp() {
+      card.classList.remove('dragging');
+      if (wasDragged) {
+        const side = card.dataset.dockSide;
+        const arr = dockItems[side];
+        const idx = arr.indexOf(card);
+        if (idx !== -1) arr.splice(idx, 1);
+        restack(side);
+        delete card.dataset.dockSide;
+      }
+    },
+  });
+
+  card.addEventListener('click', () => {
+    if (wasDragged) return;
+    // Windows restore themselves; clip cards just dismiss
+    if (card.classList.contains('window')) {
+      restoreWindow(card);
+    } else {
+      removeFromDock(card);
+    }
+  });
+}
+
+// ─── WINDOW DOCK (minimize/restore) ───
+
+function minimizeWindow(win, side = 'left') {
+  win._restoreLeft = win.style.left;
+  win._restoreTop  = win.style.top;
+  win._restoreSide = side;
+
+  const fullW = win.offsetWidth;
+  const scale = ICON_W / fullW;
+
+  const index = dockItems[side].length;
+  dockItems[side].push(win);
+  win.dataset.dockSide = side;
+
+  win.style.transformOrigin = '0 0';
+  win.style.left = dockLeft(side) + 'px';
+  win.style.top  = dockTop(index, side) + 'px';
+  win.style.transform = `scale(${scale})`;
+  win.classList.add('minimized');
+  attachDockCardBehavior(win);
+}
+
+function restoreWindow(win) {
+  const side = win.dataset.dockSide || win._restoreSide || 'left';
+  const arr = dockItems[side];
+  const idx = arr.indexOf(win);
+  if (idx !== -1) arr.splice(idx, 1);
+  delete win.dataset.dockSide;
+
+  win.style.transformOrigin = '';
+  win.style.transform = '';
+  win.style.left = win._restoreLeft;
+  win.style.top  = win._restoreTop;
+  win.classList.remove('minimized');
+
+  restack(side);
+}
+
+// ─── CLIP CARD FACTORIES ───
+
+function makeTextClip(text) {
+  const card = document.createElement('div');
+  card.className = 'clip-card';
+  const p = document.createElement('div');
+  p.className = 'clip-card-text';
+  p.textContent = text;
+  card.appendChild(p);
+  return card;
+}
+
+function makeImageClip(svgHTML) {
+  const card = document.createElement('div');
+  card.className = 'clip-card';
+  const img = document.createElement('div');
+  img.className = 'clip-card-image';
+  img.innerHTML = svgHTML;
+  img.querySelector('svg').style.cssText = 'width:100%;height:auto;display:block;';
+  card.appendChild(img);
+  return card;
+}
 
 // ─── CONTENT RENDERERS ───
 
@@ -99,18 +241,22 @@ function renderFinder(body) {
 function renderContent(type, body) {
   if (type === 'text') {
     renderText(body);
-    // attach content drag to the highlight span after render
     const highlight = body.querySelector('.highlight');
     if (highlight) {
-      attachContentDrag(highlight, () => makeTextClip(highlight.textContent));
+      attachShiftDrag(highlight, {
+        makeCard: () => makeTextClip(highlight.textContent),
+        dragsElement: false,
+      });
     }
   }
   if (type === 'finder') {
     renderFinder(body);
-    // attach content drag to each finder icon after render
     body.querySelectorAll('.finder-icon').forEach(icon => {
       const svgHTML = icon.querySelector('.finder-thumb').innerHTML;
-      attachContentDrag(icon, () => makeImageClip(svgHTML));
+      attachShiftDrag(icon, {
+        makeCard: () => makeImageClip(svgHTML),
+        dragsElement: false,
+      });
     });
   }
 }
@@ -141,115 +287,62 @@ function startDrag(handle, { onStart, onMove, onUp, onCancel } = {}) {
   });
 }
 
-// ─── CLIPBOARD DOCK ───
-const CLIP_TOP_START = 48;
-const CLIP_GAP = 20;
-const clipItems = []; // ordered list of clip card els
+// ─── UNIFIED SHIFT-DRAG ───
 
-function clipTop(index) {
-  return CLIP_TOP_START + clipItems.slice(0, index).reduce((sum, el) => sum + el.offsetHeight + CLIP_GAP, 0);
-}
+function attachShiftDrag(el, { makeCard, dragsElement = false } = {}) {
+  let offsetX, offsetY, dragStartLeft, leftTargeted, rightTargeted, hasMoved;
 
-function addClipCard(cardEl) {
-  cardEl.style.top = clipTop(clipItems.length) + 'px';
-  clipItems.push(cardEl);
-  stage.appendChild(cardEl);
-
-  attachClipDrag(cardEl);
-}
-
-function attachClipDrag(card) {
-  let wasDragged = false;
-  let startX, startY;
-
-  startDrag(card, {
-    onStart(e) {
-      // Switch from right-anchored to left-anchored for free positioning
-      const rect = card.getBoundingClientRect();
-      card.style.right = 'auto';
-      card.style.left = rect.left + 'px';
-      card.style.top  = rect.top + 'px';
-      startX = e.clientX - rect.left;
-      startY = e.clientY - rect.top;
-      wasDragged = false;
-    },
-    onMove(e) {
-      wasDragged = true;
-      card.classList.add('dragging');
-      card.style.left = (e.clientX - startX) + 'px';
-      card.style.top  = (e.clientY - startY) + 'px';
-    },
-    onUp() {
-      card.classList.remove('dragging');
-      if (wasDragged) {
-        const idx = clipItems.indexOf(card);
-        if (idx !== -1) clipItems.splice(idx, 1);
-      }
-    },
-  });
-
-  card.addEventListener('click', () => {
-    if (wasDragged) return; // don't dismiss if it was a drag
-    const idx = clipItems.indexOf(card);
-    if (idx !== -1) clipItems.splice(idx, 1);
-    card.remove();
-    // re-stack remaining right-anchored cards
-    let y = CLIP_TOP_START;
-    clipItems.forEach(c => {
-      c.style.top = y + 'px';
-      y += c.offsetHeight + CLIP_GAP;
-    });
-  });
-}
-
-function makeTextClip(text) {
-  const card = document.createElement('div');
-  card.className = 'clip-card';
-  const p = document.createElement('div');
-  p.className = 'clip-card-text';
-  p.textContent = text;
-  card.appendChild(p);
-  return card;
-}
-
-function makeImageClip(svgHTML) {
-  const card = document.createElement('div');
-  card.className = 'clip-card';
-  const img = document.createElement('div');
-  img.className = 'clip-card-image';
-  img.innerHTML = svgHTML;
-  img.querySelector('svg').style.cssText = 'width:100%;height:auto;display:block;';
-  card.appendChild(img);
-  return card;
-}
-
-function attachContentDrag(el, makeClip) {
-  let dragStartClientX, directionDecided, clipboardTargeted;
-
-  function cleanup(shouldClip) {
-    stage.classList.remove('clipboard-targeted');
-    if (shouldClip) addClipCard(makeClip());
+  function cleanup(side) {
+    if (dragsElement) el.classList.remove('dragging', 'shift-dragging');
+    stage.classList.remove('dock-targeted', 'clipboard-targeted');
+    if (!side) return;
+    if (dragsElement && el.classList.contains('window')) {
+      requestAnimationFrame(() => minimizeWindow(el, side));
+    } else {
+      addToDock(makeCard(), side);
+    }
   }
 
   startDrag(el, {
     onStart(e) {
       if (!stage.classList.contains('shift-drag-mode')) return false;
-      e.stopPropagation(); // don't bubble to window shift-drag
-      dragStartClientX = e.clientX;
-      directionDecided = false;
-      clipboardTargeted = false;
+      if (dragsElement && el.classList.contains('minimized')) return false;
+      e.stopPropagation();
+      dragStartLeft = dragsElement ? el.offsetLeft : e.clientX;
+      offsetX = e.clientX - (dragsElement ? el.offsetLeft : 0);
+      offsetY = e.clientY - (dragsElement ? el.offsetTop  : 0);
+      leftTargeted = false;
+      rightTargeted = false;
+      hasMoved = false;
+      if (dragsElement) el.classList.add('dragging', 'shift-dragging');
     },
     onMove(e) {
-      if (!directionDecided && Math.abs(e.clientX - dragStartClientX) >= 20) {
-        directionDecided = true;
-        clipboardTargeted = e.clientX > dragStartClientX;
-        stage.classList.toggle('clipboard-targeted', clipboardTargeted);
+      hasMoved = true;
+      if (dragsElement) {
+        el.style.left = (e.clientX - offsetX) + 'px';
+        el.style.top  = (e.clientY - offsetY) + 'px';
+        const currentLeft = el.offsetLeft;
+        leftTargeted  = currentLeft < dragStartLeft - 20;
+        rightTargeted = currentLeft > dragStartLeft + 20;
+      } else {
+        leftTargeted  = e.clientX < dragStartLeft - 20;
+        rightTargeted = e.clientX > dragStartLeft + 20;
+      }
+      stage.classList.toggle('dock-targeted',      leftTargeted);
+      stage.classList.toggle('clipboard-targeted', rightTargeted);
+    },
+    onUp() {
+      if (!hasMoved && dragsElement && el.classList.contains('window')) {
+        cleanup('left');
+      } else {
+        cleanup(leftTargeted ? 'left' : rightTargeted ? 'right' : null);
       }
     },
-    onUp()     { cleanup(clipboardTargeted); },
-    onCancel() { cleanup(false); },
+    onCancel() { cleanup(null); },
   });
 }
+
+// ─── WINDOW CREATION ───
 
 function createWindow({ title, tint, type = 'blank' }) {
   const win = document.createElement('div');
@@ -276,15 +369,11 @@ function createWindow({ title, tint, type = 'blank' }) {
   win.appendChild(body);
 
   attachDrag(win, titlebar);
-  attachShiftDrag(win);
+  attachShiftDrag(win, { makeCard: null, dragsElement: true });
   attachMinimize(win);
 
   win.addEventListener('mousedown', (e) => {
-    if (!win.classList.contains('minimized') && !e.target.classList.contains('tl')) scene.appendChild(win); // bring to front
-  });
-
-  win.addEventListener('click', () => {
-    if (win.classList.contains('minimized')) restoreWindow(win);
+    if (!win.classList.contains('minimized') && !e.target.classList.contains('tl')) scene.appendChild(win);
   });
 
   return win;
@@ -309,114 +398,35 @@ function attachDrag(win, handle) {
   });
 }
 
-function attachShiftDrag(win) {
-  let offsetX, offsetY, dragStartWinLeft, dockTargeted;
-
-  function cleanup(shouldDock) {
-    win.classList.remove('dragging', 'shift-dragging');
-    stage.classList.remove('dock-targeted');
-    if (shouldDock) {
-      // Remove dragging before minimizing so CSS transition fires
-      requestAnimationFrame(() => minimizeWindow(win));
-    }
-  }
-
-  startDrag(win, {
-    onStart(e) {
-      if (!stage.classList.contains('shift-drag-mode')) return false;
-      if (win.classList.contains('minimized')) return false;
-      dragStartWinLeft = win.offsetLeft;
-      offsetX = e.clientX - win.offsetLeft;
-      offsetY = e.clientY - win.offsetTop;
-      dockTargeted = false;
-      win.classList.add('dragging', 'shift-dragging');
-    },
-    onMove(e) {
-      win.style.left = (e.clientX - offsetX) + 'px';
-      win.style.top  = (e.clientY - offsetY) + 'px';
-      dockTargeted = win.offsetLeft < dragStartWinLeft - 20;
-      stage.classList.toggle('dock-targeted', dockTargeted);
-    },
-    onUp()     { cleanup(dockTargeted); },
-    onCancel() { cleanup(false); },
-  });
-}
-
 function attachMinimize(win) {
-  const lights = win.querySelectorAll('.tl');
-  lights.forEach(tl => {
+  win.querySelectorAll('.tl').forEach(tl => {
     tl.addEventListener('click', e => {
       e.stopPropagation();
       if (win.classList.contains('minimized')) {
         restoreWindow(win);
       } else {
-        minimizeWindow(win);
+        minimizeWindow(win, 'left');
       }
     });
   });
 }
 
-function iconTop(index) {
-  return ICON_TOP_START + index * (ICON_H + ICON_GAP);
-}
-
-function minimizeWindow(win) {
-  // Save current position for restore
-  win._restoreLeft = win.style.left;
-  win._restoreTop  = win.style.top;
-
-  const index = minimizedWindows.length;
-  minimizedWindows.push(win);
-
-  const fullW = win.offsetWidth;
-  const fullH = win.offsetHeight;
-  const scale = ICON_W / fullW;
-
-  const targetLeft = ICON_LEFT;
-  const targetTop  = iconTop(index);
-
-  // Shift origin to top-left before scaling so it lands at the right spot
-  win.style.transformOrigin = '0 0';
-  win.style.left = targetLeft + 'px';
-  win.style.top  = targetTop + 'px';
-  win.style.transform = `scale(${scale})`;
-  win.classList.add('minimized');
-}
-
-function restoreWindow(win) {
-  const index = minimizedWindows.indexOf(win);
-  if (index !== -1) minimizedWindows.splice(index, 1);
-
-  win.style.transformOrigin = '';
-  win.style.transform = '';
-  win.style.left = win._restoreLeft;
-  win.style.top  = win._restoreTop;
-  win.classList.remove('minimized');
-
-  // Re-stack remaining icons
-  minimizedWindows.forEach((w, i) => {
-    w.style.top = iconTop(i) + 'px';
-  });
-}
+// ─── LAYOUT ───
 
 function positionCenter(el) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const w = el.offsetWidth;
-  const h = el.offsetHeight;
-  el.style.left = Math.round((vw - w) / 2) + 'px';
-  el.style.top  = Math.round((vh - h) / 2 + MENUBAR_H / 2) + 'px';
+  el.style.left = Math.round((vw - el.offsetWidth)  / 2) + 'px';
+  el.style.top  = Math.round((vh - el.offsetHeight) / 2 + MENUBAR_H / 2) + 'px';
 }
 
 function positionCorner(el, corner) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const w = el.offsetWidth;
-  const h = el.offsetHeight;
   const top    = MENUBAR_H + MARGIN;
-  const bottom = vh - h - MARGIN;
+  const bottom = vh - el.offsetHeight - MARGIN;
   const left   = DOCK_W + MARGIN;
-  const right  = vw - w - DOCK_R_W - MARGIN;
+  const right  = vw - el.offsetWidth - DOCK_R_W - MARGIN;
   const positions = {
     'top-left':     { x: left,  y: top    },
     'top-right':    { x: right, y: top    },
@@ -428,7 +438,6 @@ function positionCorner(el, corner) {
   el.style.top  = Math.round(y) + 'px';
 }
 
-// Suppress all transitions during initial layout
 scene.classList.add('no-transition');
 
 windowTypes.forEach((def, i) => {
@@ -438,11 +447,10 @@ windowTypes.forEach((def, i) => {
     positionCenter(win);
   } else {
     positionCorner(win, def.corner);
-    minimizeWindow(win);
+    minimizeWindow(win, 'left');
   }
 });
 
-// Re-enable transitions after first paint
 requestAnimationFrame(() => {
   requestAnimationFrame(() => {
     scene.classList.remove('no-transition');
@@ -466,6 +474,8 @@ document.addEventListener('keyup', e => {
     clearShiftHighlight();
   }
 });
+
+// ─── SHIFT HOVER HIGHLIGHT ───
 
 let shiftHighlightedEl = null;
 let highlightClone = null;

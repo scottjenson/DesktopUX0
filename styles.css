@@ -268,10 +268,9 @@ html, body {
   opacity: 1;
 }
 
-/* clip cards inside the clipboard dock */
+/* clip cards — left and right docks, positioned by JS */
 .clip-card {
   position: absolute;
-  right: calc(var(--dock-inset) + (var(--dock-border-w) - var(--clip-card-w)) / 2); /* centered within the right dock area */
   width: var(--clip-card-w);
   background: #fff;
   border-radius: 6px;
