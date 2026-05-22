@@ -310,7 +310,7 @@ function attachDrag(win, handle) {
 }
 
 function attachShiftDrag(win) {
-  let offsetX, offsetY, dragStartClientX, dockTargeted;
+  let offsetX, offsetY, dragStartWinLeft, dockTargeted;
 
   function cleanup(shouldDock) {
     win.classList.remove('dragging', 'shift-dragging');
@@ -325,17 +325,16 @@ function attachShiftDrag(win) {
     onStart(e) {
       if (!stage.classList.contains('shift-drag-mode')) return false;
       if (win.classList.contains('minimized')) return false;
-      dragStartClientX = e.clientX;
+      dragStartWinLeft = win.offsetLeft;
       offsetX = e.clientX - win.offsetLeft;
       offsetY = e.clientY - win.offsetTop;
-      directionDecided = false;
       dockTargeted = false;
       win.classList.add('dragging', 'shift-dragging');
     },
     onMove(e) {
       win.style.left = (e.clientX - offsetX) + 'px';
       win.style.top  = (e.clientY - offsetY) + 'px';
-      dockTargeted = e.clientX < dragStartClientX - 20;
+      dockTargeted = win.offsetLeft < dragStartWinLeft - 20;
       stage.classList.toggle('dock-targeted', dockTargeted);
     },
     onUp()     { cleanup(dockTargeted); },
@@ -469,12 +468,54 @@ document.addEventListener('keyup', e => {
 });
 
 let shiftHighlightedEl = null;
+let highlightClone = null;
 
 function clearShiftHighlight() {
   if (shiftHighlightedEl) {
     shiftHighlightedEl.classList.remove('shift-highlighted');
+    const thumb = shiftHighlightedEl.querySelector('.finder-thumb');
+    if (thumb) thumb.classList.remove('shift-highlighted');
     shiftHighlightedEl = null;
   }
+  if (highlightClone) {
+    highlightClone.remove();
+    highlightClone = null;
+  }
+}
+
+function createHighlightClone(span) {
+  const spanRect = span.getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+
+  const clone = document.createElement('div');
+  clone.textContent = span.textContent;
+  clone.style.cssText = `
+    position: absolute;
+    left: ${spanRect.left - stageRect.left}px;
+    top: ${spanRect.top - stageRect.top}px;
+    width: ${spanRect.width}px;
+    height: ${spanRect.height}px;
+    background: #b3d4ff;
+    border-radius: 2px;
+    padding: 0 2px;
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    font-size: 13.5px;
+    line-height: ${spanRect.height}px;
+    color: #1a1a1a;
+    pointer-events: none;
+    z-index: 9000;
+    transform-origin: center center;
+    transition: transform 0.25s ease, filter 0.25s ease;
+  `;
+  stage.appendChild(clone);
+
+  requestAnimationFrame(() => {
+    clone.style.outline = '3px solid red';
+    clone.style.transform = 'scale(1.06) translateY(0px)';
+    clone.style.filter = 'drop-shadow(0 0 8px rgba(255, 0, 0, 0.5))';
+  });
+
+  return clone;
 }
 
 function updateShiftHighlight(x, y) {
@@ -489,10 +530,17 @@ function updateShiftHighlight(x, y) {
 
   if (target === shiftHighlightedEl) return;
   clearShiftHighlight();
-  if (target) {
+  if (!target) return;
+
+  if (target.classList.contains('highlight')) {
+    highlightClone = createHighlightClone(target);
+  } else if (target.classList.contains('finder-icon')) {
+    const thumb = target.querySelector('.finder-thumb');
+    (thumb || target).classList.add('shift-highlighted');
+  } else {
     target.classList.add('shift-highlighted');
-    shiftHighlightedEl = target;
   }
+  shiftHighlightedEl = target;
 }
 
 document.addEventListener('mousemove', e => {
