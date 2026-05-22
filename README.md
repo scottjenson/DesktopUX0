@@ -1,4 +1,4 @@
-# Desktop0
+# DesktopUX0
 
 An interactive macOS-style desktop prototype exploring a new interaction model for files and content.
 
