@@ -22,7 +22,8 @@ An interactive macOS-style desktop prototype built for **stage demo purposes**. 
 
 - `index.html` — shell only: menubar, `#scene`, dock overlays, cursor ring
 - `styles.css` — all visual styling
-- `main.js` — window definitions, creation, all interaction logic
+- `content.js` — window definitions (`windowTypes`), content renderers, clip card factories; loaded first
+- `main.js` — all interaction logic: dock system, drag helpers, window creation, layout, shift-drag, hover highlight
 
 ## Architecture
 
@@ -32,35 +33,38 @@ An interactive macOS-style desktop prototype built for **stage demo purposes**. 
   - `#scene` — window container; gets `.no-transition` during initial layout
   - `#dock-highlight` — left dock drop zone visual (invisible until drag)
   - `#clipboard-dock` — right dock drop zone visual (invisible until drag)
-  - `.clip-card` elements — appended directly to `#stage`, float freely
+  - `.window` and `.clip-card` elements — appended directly to `#stage` when docked, float freely
 
 **Window system:**
-- `windowTypes` array — `{ title, tint, type, corner }`; first entry is center window (no `corner`)
+- `windowTypes` array (in `content.js`) — `{ title, tint, type, corner }`; first entry is center window (no `corner`)
 - `type`: `'blank'` | `'text'` | `'finder'` — dispatched by `renderContent(type, body)`
 - `createWindow(def)` — builds `.window > .window-titlebar + .window-body`, attaches all handlers
 
-**Content types:**
-- `renderText(body)` — prose with a `.highlight` span; `attachContentDrag` wired to the span
-- `renderFinder(body)` — 3×2 SVG thumbnail grid; `attachContentDrag` wired to each `.finder-icon`
+**Content types (in `content.js`):**
+- `renderText(body)` — prose with a `.highlight` span; `attachShiftDrag` wired to the span
+- `renderFinder(body)` — 3×2 SVG thumbnail grid; `attachShiftDrag` wired to each `.finder-icon`
 - SVGs are fully inline — no external assets
+- `makeTextClip(text)` / `makeImageClip(svgHTML)` — factories that produce `.clip-card` elements
 
-**Minimize/restore (window dock — left side):**
-- `minimizeWindow(win)` — saves `_restoreLeft`/`_restoreTop`, scales window to `ICON_W × ICON_H` (100×76px) via `transform: scale()` with `transformOrigin: 0 0`, stacks on left edge
-- `restoreWindow(win)` — clears transform, restores position, re-stacks remaining icons
-- `minimizedWindows[]` — ordered array; index → `top` via `iconTop(i)`
+**Unified dock system:**
+- `dockItems = { left: [], right: [] }` — both docks share one data structure
+- `addToDock(card, side)` — positions card in the named dock, calls `attachDockCardBehavior`
+- `removeFromDock(card)` — removes from its dock array and calls `restack(side)`
+- `minimizeWindow(win, side)` — saves restore position, scales window to `ICON_W` (100px) via `transform: scale()` with `transformOrigin: 0 0`, pushes into `dockItems[side]`
+- `restoreWindow(win)` — clears transform, restores position, removes from dock array, restacks
+- `attachDockCardBehavior(card)` — wires drag-out and click-to-restore/dismiss; guarded by `_dockBehaviorAttached` flag to prevent duplicate listeners
 
-**Clipboard dock (right side):**
-- `clipItems[]` — ordered array of `.clip-card` els appended to `#stage`
-- `addClipCard(el)` — stacks card in the right dock region, wires drag and dismiss
-- Cards are always children of `#stage` (never re-parented into windows) — positional overlap fakes "dropped into window"
-- Click without dragging dismisses a card; remaining stacked cards re-stack
-
-**Shift-drag mode:**
-- Shift key → `shift-drag-mode` on `#stage` → grab cursor + blue cursor ring (96px)
-- Dragging a **window** leftward 20px → `dock-targeted` → release minimizes to left dock
-- Dragging a **content item** rightward 20px → `clipboard-targeted` → release adds clip card to right dock
-- Content item `mousedown` calls `e.stopPropagation()` to prevent window drag from firing
+**Unified shift-drag:**
+- `attachShiftDrag(el, { makeCard, dragsElement })` — single handler for all three draggable types
+- `dragsElement: true` for windows (el moves during drag), `false` for content (el stays put)
+- Continuously tracks left/right displacement (20px threshold), toggles both `dock-targeted` and `clipboard-targeted` live — direction is reversible mid-drag
+- On release: left → `minimizeWindow(win, 'left')` or `addToDock(makeCard(), 'left')`; right → same but `'right'`; no movement on a window → minimizes to left dock (shift-click)
 - Releasing Shift mid-drag dispatches `shiftcancelled` event, cleans up all state
+
+**Shift hover highlight:**
+- `updateShiftHighlight(x, y)` — runs on every `mousemove` in shift mode; picks the innermost draggable target (`.finder-icon` > `.highlight` > `.window`) via `elementFromPoint`
+- `.shift-highlighted` CSS class: `scale(1.06) translateY(2px)` + red outline + drop-shadow
+- `.highlight` span gets a positioned clone on `#stage` instead (escapes `overflow: hidden` clipping); clone is removed on un-hover
 
 **Positioning:**
 - `positionCenter(el)` — centers in viewport below menubar
