@@ -65,12 +65,13 @@ function attachDockCardBehavior(card) {
 
   startDrag(card, {
     onStart(e) {
+      wasDragged = false;
+      if (!card.dataset.dockSide) return false;
       const rect = card.getBoundingClientRect();
       card.style.left = rect.left + 'px';
       card.style.top  = rect.top + 'px';
       startX = e.clientX - rect.left;
       startY = e.clientY - rect.top;
-      wasDragged = false;
     },
     onMove(e) {
       wasDragged = true;
@@ -174,9 +175,10 @@ function attachShiftDrag(el, { makeCard, dragsElement = false } = {}) {
   function cleanup(side) {
     if (dragsElement) el.classList.remove('dragging', 'shift-dragging');
     stage.classList.remove('dock-targeted', 'clipboard-targeted');
+    clearShiftHighlight();
     if (!side) return;
     if (dragsElement && el.classList.contains('window')) {
-      requestAnimationFrame(() => minimizeWindow(el, side));
+      requestAnimationFrame(() => requestAnimationFrame(() => minimizeWindow(el, side)));
     } else {
       addToDock(makeCard(), side);
     }
